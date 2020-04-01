@@ -51,7 +51,7 @@ export default class ChatComponent extends Vue {
 
   send() {
     const message = `${this.playerName} > ${this.text}`;
-    this.apiService.get(`/sendMessage?playerId=${this.playerId}&gameId=${this.gameId}&message=${message}`).then((res) => {
+    this.apiService.get(`/sendMessage?playerId=${this.playerId}&gameId=${this.gameId}&message=${message}`).then(() => {
       this.text = '';
       const container = this.$el.querySelector('.chat .body');
       if (container) {

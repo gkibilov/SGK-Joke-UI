@@ -1,4 +1,5 @@
 import { Action } from './Action';
+
 export interface CurrentPlay {
   kozyr: string;
   actions: Array<Action>;

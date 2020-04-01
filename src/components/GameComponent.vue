@@ -192,7 +192,7 @@
 </template>
 
 <script lang="ts">
-import Axios, { AxiosError } from 'axios';
+import { AxiosError } from 'axios';
 import { Component, Vue } from 'vue-property-decorator';
 import AccountComponent from '@/components/AccountComponent.vue';
 import ChatComponent from '@/components/ChatComponent.vue';

@@ -11,7 +11,7 @@
             </span>
             <span
               :class="{ lineThrough: players[index].bonusMultipliers.length
-                        && players[index].bonusMultipliers[callIndex-1] === -1 }">
+                        && players[index].bonusMultipliers[callIndex-1] === 0 }">
               {{players[index].calls[callIndex-1]}} - {{players[index].scores[callIndex-1]}}
             </span>
             <span v-if="players[index].bonusMultipliers.length">

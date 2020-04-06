@@ -1,7 +1,6 @@
 <template>
   <div class="playingCards">
     <div class='some-page-wrapper'>
-      <a v-if="showResumePolling" @click="startPolling()">resume polling</a>
       <div class="flex-container">
         <div class="flex-child gamePlay">
           <div class='row'>
@@ -192,7 +191,6 @@
 </template>
 
 <script lang="ts">
-import { AxiosError } from 'axios';
 import { Component, Vue } from 'vue-property-decorator';
 import AccountComponent from '@/components/AccountComponent.vue';
 import ChatComponent from '@/components/ChatComponent.vue';
@@ -276,8 +274,6 @@ export default class GameComponent extends Vue {
 
   public version = 0;
 
-  public showResumePolling = false;
-
   created() {
     this.startPolling();
   }
@@ -290,9 +286,9 @@ export default class GameComponent extends Vue {
     }, 2000);
   }
 
-  play() {
+  play(src: string) {
     const audio = new Audio();
-    audio.src = 'placeCard.mp3';
+    audio.src = src;
     audio.play();
   }
 
@@ -305,7 +301,7 @@ export default class GameComponent extends Vue {
     }
   }
 
-  calculateCardPosition(card: any): any {
+  calculateCardPosition(card: any): string {
     let nIndex = -1;
     this.opponents.forEach((opp, index) => {
       if (opp.position === card.playerPosition) {
@@ -358,7 +354,7 @@ export default class GameComponent extends Vue {
           && currentPlayer.cards[0] && currentPlayer.cards[0]) {
         if (this.currentState.currentTurnPosition !== this.currentState.actingPlayerPosition) {
           this.apiService.get(`/reaction?playerId=${currentPlayer.id}&cardId=${card.id}&gameId=${this.gameId}&jokerReaction=${action}`).then((res) => {
-            this.play();
+            this.play('placeCard.mp3');
             this.currentState = res.data.state;
             if (this.currentState && this.currentState.currentPlay
                 && this.currentState.currentPlay.actions) {
@@ -367,7 +363,7 @@ export default class GameComponent extends Vue {
           });
         } else {
           this.apiService.get(`/action?playerId=${currentPlayer.id}&cardId=${card.id}&gameId=${this.gameId}&jokerAction=${action}`).then((res) => {
-            this.play();
+            this.play('placeCard.mp3');
             this.currentState = res.data.state;
             if (this.currentState && this.currentState.currentPlay
                 && this.currentState.currentPlay.actions) {
@@ -398,6 +394,7 @@ export default class GameComponent extends Vue {
     const { gameId, id } = this.$route.params;
     this.apiService.get(`/getPlayersState?playerId=${id}&gameId=${gameId}`).then((res) => {
       if (res.data.state.version !== this.version) {
+        this.version = res.data.state.version;
         this.currentState = res.data.state;
         if (this.currentState && this.currentState.currentPlay
             && this.currentState.currentPlay.actions) {
@@ -409,15 +406,35 @@ export default class GameComponent extends Vue {
         res.data.opponents.forEach((player: Player) => {
           if (player.position) {
             Vue.set(this.players, player.position, player);
-            // this.players[player.position] = player;
           }
         });
         this.kozyr = res.data.state.currentPlay.kozyr;
+        this.beepIfMyTurn(res.data);
+        this.beepIfMyCall(res.data);
       }
-    }).catch((error: AxiosError) => {
+    }).catch(() => {
       clearInterval(this.polling);
-      this.showResumePolling = true;
+      this.$confirm('Game was unexpectedly paused. Do you want to continue?').then(() => {
+        this.startPolling();
+      });
     });
+  }
+
+  beepIfMyTurn(data: any) {
+    if ((data.state === 'CALLS_MADE'
+        || data.state.status === 'PLAY_DONE'
+        || data.state.status === 'PLAY_STARTED')
+        && data.state.currentTurnPosition === data.player.position) {
+      this.play('beepYourTurn.mp3');
+    }
+  }
+
+  beepIfMyCall(data: any) {
+    if (data.state.status === 'DEALT'
+        && data.state.currentTurnPosition === data.player.position
+        && data.state.currentPlay.kozyr != null) {
+      this.play('beepYourTurn.mp3');
+    }
   }
 
   beforeDestroy() {
@@ -557,6 +574,10 @@ export default class GameComponent extends Vue {
 .middleActoins .card {
   margin: 0 -1.95em;
   box-shadow: 0.1em 0.1em 0.1em #333;
+}
+
+.middleActoins .card:hover {
+  bottom: 0.5em;
 }
 
 .middleActoins .card .hart:after {
@@ -840,8 +861,8 @@ export default class GameComponent extends Vue {
   padding: 10px 3px;
 }
 
-.attribute.huntout,
-.attribute.huntin {
+.attribute.hunt,
+.attribute.huntout {
   font-size: 1em;
 }
 

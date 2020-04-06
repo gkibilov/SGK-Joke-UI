@@ -2,7 +2,7 @@
   <div class="chat">
     <template v-if="showChat">
       <div class="header">
-        <h3>Mirc Chat</h3>
+        <h3>Chat</h3>
         <a @click="hideChat()">x</a>
       </div>
       <div class="body">
@@ -21,6 +21,7 @@
       <div class="foldedChat">
         <div class="header">
           <h3>Chat</h3>
+          <span v-if="newMessage" class="newMessage"></span>
           <a @click="openChat()">show</a>
         </div>
       </div>
@@ -29,8 +30,14 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
-import Axios, { AxiosError } from 'axios';
+import
+{
+  Component,
+  Prop,
+  Vue,
+  Watch,
+} from 'vue-property-decorator';
+import { AxiosError } from 'axios';
 import Service from '../services/api.service';
 
 @Component
@@ -43,11 +50,23 @@ export default class ChatComponent extends Vue {
 
   @Prop() private playerName!: string;
 
+  @Watch('messages')
+  onMessagesChanged(newVal: string, oldVal: string) {
+    if (oldVal && newVal && oldVal.length !== newVal.length) {
+      this.newMessage = true;
+      const audio = new Audio();
+      audio.src = 'message.mp3';
+      audio.play();
+    }
+  }
+
   public text = '';
 
   private apiService: Service = new Service();
 
   private showChat = false;
+
+  private newMessage = false;
 
   send() {
     const message = `${this.playerName} > ${this.text}`;
@@ -66,10 +85,12 @@ export default class ChatComponent extends Vue {
 
   hideChat() {
     this.showChat = false;
+    this.newMessage = false;
   }
 
   openChat() {
     this.showChat = true;
+    this.newMessage = false;
   }
 }
 </script>
@@ -103,6 +124,8 @@ export default class ChatComponent extends Vue {
   font-size: 0.5em;
   cursor: pointer;
   margin: 0.3em 0.5em;
+  flex: 1;
+  text-align: right;
 }
 
 .chat .body {
@@ -149,6 +172,14 @@ export default class ChatComponent extends Vue {
   font-size: 0.6em;
   color: #fff;
   padding: 8px;
+}
+
+.chat .newMessage {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #008000;
+  margin-top: 0.3em;
 }
 
 </style>

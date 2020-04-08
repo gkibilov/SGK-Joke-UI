@@ -117,8 +117,12 @@
                 <template v-if="me.cards && me.cards.length > 0">
                   <div class="cardWrapper">
                     <div v-for='card in me.cards' v-bind:key='card.id'
-                        class='card' :class='deck[card.id].suite'
+                        class='card'
+                        v-bind:class="[isDisabled(card) ?
+                                      'isDisabled' : '', deck[card.id].suite]"
                         @click="hitAction(card)">
+                      <div v-if="isDisabled(card)"
+                      class="maskCard"></div>
                       <span class="rank">
                         {{ card.id != 1 && card.id != 2 ? deck[card.id].type : ' ' }}
                       </span>
@@ -420,6 +424,101 @@ export default class GameComponent extends Vue {
     });
   }
 
+  isDisabled(card: Card) {
+    if (this.currentState.status === 'DEALT'
+        || this.currentState.currentTurnPosition !== this.me.position) {
+      return true;
+    }
+
+    if (this.currentState.currentPlay
+        && this.currentState.status === 'PLAY_STARTED'
+        && this.currentState.currentTurnPosition === this.me.position) {
+      // exclud joker
+      if (card.suite === 'BEZ') return false;
+      // if only one card in hand
+      if (this.me.cards && this.me.cards.length === 1) return false;
+      const kozyr = this.currentState.currentPlay.kozyr.suite || '';
+      if (this.currentState.currentPlay && this.currentState.currentPlay.jokerActionWant) {
+        const highiestSuite = this.findHighiestSuite();
+        // when user has highiest requested suite
+        if (highiestSuite.id && card.id
+            && highiestSuite.id !== -1
+            && highiestSuite.id !== card.id) {
+          return true;
+        }
+
+        if (!this.hasSuite(kozyr)) {
+          return false;
+        }
+
+        // when user has no requisted suit but has kozyr
+        if (highiestSuite.id === -1
+            && card.suite !== this.currentState.currentPlay.kozyr.suite) {
+          console.log(card.suite);
+          return true;
+        }
+      }
+
+      if (this.currentState.currentPlay && this.currentState.currentPlay.actingSuite) {
+        const { actingSuite } = this.currentState.currentPlay;
+
+        if (!this.hasSuite(actingSuite) && !this.hasSuite(kozyr)) {
+          return false;
+        }
+
+        if (this.hasSuite(actingSuite)) {
+          if (card.suite !== this.currentState.currentPlay.actingSuite) {
+            return true;
+          }
+        }
+
+        if (!this.hasSuite(actingSuite) && this.hasSuite(kozyr)) {
+          if (this.currentState.currentPlay
+              && this.currentState.currentPlay.kozyr
+              && card.suite !== this.currentState.currentPlay.kozyr.suite) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  hasSuite(actingSuite: string) {
+    let has = false;
+    if (this.currentState.currentPlay) {
+      const { cards } = this.me;
+      if (cards && cards.length) {
+        cards.forEach((c) => {
+          if (c.suite !== 'BEZ' && c.suite === actingSuite) {
+            has = true;
+          }
+        });
+      }
+    }
+    return has;
+  }
+
+  findHighiestSuite() {
+    let card: Card = { id: -1 };
+    if (this.currentState.currentPlay) {
+      const { actingSuite } = this.currentState.currentPlay;
+      const { cards } = this.me;
+      if (cards && cards.length) {
+        cards.forEach((c) => {
+          if (c.id
+            && card.id
+            && c.suite === actingSuite
+            && c.id > card.id) {
+            card = c;
+          }
+        });
+      }
+    }
+    return card;
+  }
+
   beepIfMyTurn(data: any) {
     if ((data.state === 'CALLS_MADE'
         || data.state.status === 'PLAY_DONE'
@@ -574,6 +673,7 @@ export default class GameComponent extends Vue {
 .middleActoins .card {
   margin: 0 -1.95em;
   box-shadow: 0.1em 0.1em 0.1em #333;
+  pointer-events: none;
 }
 
 .middleActoins .card:hover {
@@ -1051,6 +1151,23 @@ export default class GameComponent extends Vue {
   text-align: center;
   font-size: 4em;
   margin-top: 0.3em;
+}
+
+.maskCard {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+  bottom: 0;
+  pointer-events: none;
+  right: 0;
+  left: 0;
+  background-color: #000;
+  opacity: 0.2;
+  border-radius: 0.3em;
+}
+
+.isDisabled {
+  pointer-events: none;
 }
 
 @media only screen and (max-width: 900px) {

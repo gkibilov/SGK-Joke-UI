@@ -8,7 +8,7 @@ export interface State {
   roundNumber?: number;
   numCards?: number;
   players?: Array<Player>;
-  me?: Player;
+  player?: Player;
   actingPlayerPosition?: number;
   currentTurnPosition?: number;
   status?: string;

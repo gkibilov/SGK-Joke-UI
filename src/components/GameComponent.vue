@@ -198,11 +198,14 @@
 import { Component, Vue } from 'vue-property-decorator';
 import AccountComponent from '@/components/AccountComponent.vue';
 import ChatComponent from '@/components/ChatComponent.vue';
+import Deck from '@/services/deck.service';
 
 import { Player } from '../models/Player';
-import { State } from '../models/State';
+import { State, StateStatus } from '../models/State';
 import { Card } from '../models/Card';
 import Service from '../services/api.service';
+import EventBus from '../services/eventBus.service';
+import { Message, ActionType } from '../models/Message';
 
 Vue.component('account', AccountComponent);
 Vue.component('chat', ChatComponent);
@@ -217,44 +220,7 @@ export default class GameComponent extends Vue {
 
   public actions: Array<object> = [];
 
-  public deck: { [key: string]: Card } = {
-    1: { id: 1, suite: 'bez', type: 'JOKER' },
-    2: { id: 2, suite: 'bez', type: 'JOKER' },
-    3: { id: 3, suite: 'spade', type: '7' },
-    4: { id: 4, suite: 'spade', type: '8' },
-    5: { id: 5, suite: 'spade', type: '9' },
-    6: { id: 6, suite: 'spade', type: '10' },
-    7: { id: 7, suite: 'spade', type: 'J' },
-    8: { id: 8, suite: 'spade', type: 'Q' },
-    9: { id: 9, suite: 'spade', type: 'K' },
-    10: { id: 10, suite: 'spade', type: 'A' },
-    11: { id: 11, suite: 'club', type: '7' },
-    12: { id: 12, suite: 'club', type: '8' },
-    13: { id: 13, suite: 'club', type: '9' },
-    14: { id: 14, suite: 'club', type: '10' },
-    15: { id: 15, suite: 'club', type: 'J' },
-    16: { id: 16, suite: 'club', type: 'Q' },
-    17: { id: 17, suite: 'club', type: 'K' },
-    18: { id: 18, suite: 'club', type: 'A' },
-    19: { id: 19, suite: 'diamond', type: '6' },
-    20: { id: 20, suite: 'diamond', type: '7' },
-    21: { id: 21, suite: 'diamond', type: '8' },
-    22: { id: 22, suite: 'diamond', type: '9' },
-    23: { id: 23, suite: 'diamond', type: '10' },
-    24: { id: 24, suite: 'diamond', type: 'J' },
-    25: { id: 25, suite: 'diamond', type: 'Q' },
-    26: { id: 26, suite: 'diamond', type: 'K' },
-    27: { id: 27, suite: 'diamond', type: 'A' },
-    28: { id: 28, suite: 'hart', type: '6' },
-    29: { id: 29, suite: 'hart', type: '7' },
-    30: { id: 30, suite: 'hart', type: '8' },
-    31: { id: 31, suite: 'hart', type: '9' },
-    32: { id: 32, suite: 'hart', type: '10' },
-    33: { id: 33, suite: 'hart', type: 'J' },
-    34: { id: 34, suite: 'hart', type: 'Q' },
-    35: { id: 35, suite: 'hart', type: 'K' },
-    36: { id: 36, suite: 'hart', type: 'A' },
-  }
+  public deck: { [key: string]: Card } = Deck;
 
   public me: Player = {};
 
@@ -263,8 +229,6 @@ export default class GameComponent extends Vue {
   public opponents: Array<Player> = [];
 
   public kozyr = 'none';
-
-  public polling = -1;
 
   public gameId = '';
 
@@ -276,18 +240,20 @@ export default class GameComponent extends Vue {
 
   public joker: Card = {};
 
-  public version = 0;
+  mounted() {
+    EventBus.$on('connected', () => {
+      this.startGame();
+    });
 
-  created() {
-    this.startPolling();
-  }
-
-  startPolling() {
-    this.refreshState();
-    this.gameId = this.$route.params.gameId;
-    this.polling = setInterval(() => {
-      this.refreshState();
-    }, 2000);
+    EventBus.$on('app:user:reply', (data) => {
+      if (data.requestType === ActionType.START || data.requestType === ActionType.CALL
+          || data.requestType === ActionType.SET_KOZYR) {
+        this.refreshState(data);
+      } else if (data.requestType === ActionType.REACTION
+                || data.requestType === ActionType.ACTION) {
+        this.actionHandler(data.state);
+      }
+    });
   }
 
   play(src: string) {
@@ -305,10 +271,10 @@ export default class GameComponent extends Vue {
     }
   }
 
-  calculateCardPosition(card: any): string {
+  calculateCardPosition(card: Card): string {
     let nIndex = -1;
     this.opponents.forEach((opp, index) => {
-      if (opp.position === card.playerPosition) {
+      if (opp.position === card['playerPosition']) {
         nIndex = index;
       }
     });
@@ -353,85 +319,94 @@ export default class GameComponent extends Vue {
 
   action(card: Card, action: string) {
     if (this.currentState.currentTurnPosition && this.currentState.actingPlayerPosition) {
-      const currentPlayer: Player = this.me;
-      if (currentPlayer && currentPlayer.cards
-          && currentPlayer.cards[0] && currentPlayer.cards[0]) {
-        if (this.currentState.currentTurnPosition !== this.currentState.actingPlayerPosition) {
-          this.apiService.get(`/reaction?playerId=${currentPlayer.id}&cardId=${card.id}&gameId=${this.gameId}&jokerReaction=${action}`).then((res) => {
-            this.play('placeCard.mp3');
-            this.currentState = res.data.state;
-            if (this.currentState && this.currentState.currentPlay
-                && this.currentState.currentPlay.actions) {
-              this.actions = this.currentState.currentPlay.actions;
-            }
-          });
-        } else {
-          this.apiService.get(`/action?playerId=${currentPlayer.id}&cardId=${card.id}&gameId=${this.gameId}&jokerAction=${action}`).then((res) => {
-            this.play('placeCard.mp3');
-            this.currentState = res.data.state;
-            if (this.currentState && this.currentState.currentPlay
-                && this.currentState.currentPlay.actions) {
-              this.actions = this.currentState.currentPlay.actions;
-            }
-          });
-        }
+      const { gameId, id } = this.$route.params;
+      const message: Message = {
+        playerId: id,
+        gameId,
+        cardId: card.id,
+      };
+      if (this.currentState.currentTurnPosition !== this.currentState.actingPlayerPosition) {
+        message.type = ActionType.REACTION;
+        message.jokerReaction = action;
+        this['$ws'].send('/app/playerMessage', JSON.stringify(message));
+      } else {
+        message.type = ActionType.ACTION;
+        message.jokerAction = action;
+        this['$ws'].send('/app/playerMessage', JSON.stringify(message));
       }
+    }
+  }
+
+  private actionHandler(state: State) {
+    this.play('placeCard.mp3');
+    this.currentState = state;
+    if (this.currentState && this.currentState.currentPlay
+        && this.currentState.currentPlay.actions) {
+      this.actions = this.currentState.currentPlay.actions;
     }
   }
 
   call(quantity: number) {
     if (this.currentState.currentTurnPosition) {
-      const currentPlayer: Player = this.players[this.currentState.currentTurnPosition];
-      this.apiService.get(`/call?playerId=${currentPlayer.id}&wantQty=${quantity}&gameId=${this.gameId}`).then((res) => {
-        this.currentState = res.data.state;
-      });
+      const { gameId, id } = this.$route.params;
+      const message = {
+        type: ActionType.CALL,
+        playerId: id,
+        gameId,
+        wantQty: quantity,
+      };
+      this['$ws'].send('/app/playerMessage', JSON.stringify(message));
     }
   }
 
   setKozyr(suit: string) {
-    this.apiService.get(`/setKozyr?playerId=${this.me.id}&kozyrSuite=${suit}&gameId=${this.gameId}`).then((res) => {
-      this.currentState = res.data.state;
-    });
+    const { gameId, id } = this.$route.params;
+    const message = {
+      type: ActionType.SET_KOZYR,
+      playerId: id,
+      gameId,
+      kozyrSuite: suit,
+    };
+    this['$ws'].send('/app/playerMessage', JSON.stringify(message));
   }
 
-  refreshState() {
+  startGame() {
     const { gameId, id } = this.$route.params;
-    this.apiService.get(`/getPlayersState?playerId=${id}&gameId=${gameId}`).then((res) => {
-      if (res.data.state.version !== this.version) {
-        this.version = res.data.state.version;
-        this.currentState = res.data.state;
-        if (this.currentState && this.currentState.currentPlay
-            && this.currentState.currentPlay.actions) {
-          this.actions = this.currentState.currentPlay.actions;
-        }
-        this.me = res.data.player;
-        Vue.set(this.players, res.data.player.position, res.data.player);
-        this.opponents = res.data.opponents;
-        res.data.opponents.forEach((player: Player) => {
-          if (player.position) {
-            Vue.set(this.players, player.position, player);
-          }
-        });
-        this.kozyr = res.data.state.currentPlay.kozyr;
-        this.beepIfMyTurn(res.data);
-        this.beepIfMyCall(res.data);
+    const message = {
+      type: ActionType.START,
+      playerId: id,
+      gameId,
+    };
+    this['$ws'].send('/app/playerMessage', JSON.stringify(message));
+  }
+
+  refreshState(res: any) {
+    this.currentState = res.state;
+    if (this.currentState && this.currentState.currentPlay
+        && this.currentState.currentPlay.actions) {
+      this.actions = this.currentState.currentPlay.actions;
+    }
+    this.me = res.player;
+    Vue.set(this.players, res.player.position, res.player);
+    this.opponents = res.opponents;
+    res.opponents.forEach((player: Player) => {
+      if (player.position) {
+        Vue.set(this.players, player.position, player);
       }
-    }).catch(() => {
-      clearInterval(this.polling);
-      this.$confirm('Game was unexpectedly paused. Do you want to continue?').then(() => {
-        this.startPolling();
-      });
     });
+    this.kozyr = res.state.currentPlay.kozyr;
+    this.beepIfMyTurn(res);
+    this.beepIfMyCall(res);
   }
 
   isDisabled(card: Card) {
-    if (this.currentState.status === 'DEALT'
+    if (this.currentState.status === StateStatus.DEALT
         || this.currentState.currentTurnPosition !== this.me.position) {
       return true;
     }
 
     if (this.currentState.currentPlay
-        && this.currentState.status === 'PLAY_STARTED'
+        && this.currentState.status === StateStatus.PLAY_STARTED
         && this.currentState.currentTurnPosition === this.me.position) {
       // exclud joker
       if (card.suite === 'BEZ') return false;
@@ -520,25 +495,20 @@ export default class GameComponent extends Vue {
   }
 
   beepIfMyTurn(data: any) {
-    if ((data.state === 'CALLS_MADE'
-        || data.state.status === 'PLAY_DONE'
-        || data.state.status === 'PLAY_STARTED')
+    if ((data.state === StateStatus.CALLS_MADE
+        || data.state.status === StateStatus.PLAY_DONE
+        || data.state.status === StateStatus.PLAY_STARTED)
         && data.state.currentTurnPosition === data.player.position) {
       this.play('beepYourTurn.mp3');
     }
   }
 
   beepIfMyCall(data: any) {
-    if (data.state.status === 'DEALT'
+    if (data.state.status === StateStatus.DEALT
         && data.state.currentTurnPosition === data.player.position
         && data.state.currentPlay.kozyr != null) {
       this.play('beepYourTurn.mp3');
     }
-  }
-
-  beforeDestroy() {
-    clearInterval(this.polling);
-    this.polling = -1;
   }
 }
 </script>
@@ -549,7 +519,7 @@ export default class GameComponent extends Vue {
   background-color: #f00 !important;
 }
 .some-page-wrapper {
-  background-color: green;
+  background-color: #243e54;
 }
 .row {
   display: flex;

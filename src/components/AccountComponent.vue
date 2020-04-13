@@ -38,9 +38,9 @@
               {{ (players[index].pulkaScores[3]/100).toFixed(1)}}
             </div>
         </div>
-        <div class="total">
+        <!-- <div class="total">
           {{(players[index].totalScore / 100).toFixed(1)}}
-        </div>
+        </div> -->
       </div>
     </div>
   </div>

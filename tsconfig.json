@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
+    "target": "es5",
+    "module": "es2015",
     "strict": true,
+    "noImplicitThis": true,
     "jsx": "preserve",
     "importHelpers": true,
     "moduleResolution": "node",
@@ -12,8 +13,11 @@
     "strictPropertyInitialization": false,
     "sourceMap": true,
     "baseUrl": ".",
+    "allowJs": true,
+    "noImplicitAny": false,
     "types": [
-      "webpack-env"
+      "webpack-env",
+      "facebook-js-sdk",
     ],
     "paths": {
       "@/*": [

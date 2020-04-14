@@ -241,19 +241,24 @@ export default class GameComponent extends Vue {
   public joker: Card = {};
 
   mounted() {
-    EventBus.$on('connected', () => {
-      this.startGame();
-    });
-
     EventBus.$on('app:user:reply', (data) => {
-      if (data.requestType === ActionType.START || data.requestType === ActionType.CALL
-          || data.requestType === ActionType.SET_KOZYR) {
+      if (data.requestType === ActionType.START
+          || data.requestType === ActionType.CALL
+          || data.requestType === ActionType.SET_KOZYR
+          || data.requestType === ActionType.MESSAGE) {
         this.refreshState(data);
       } else if (data.requestType === ActionType.REACTION
                 || data.requestType === ActionType.ACTION) {
-        this.actionHandler(data.state);
+        this.actionHandler(data);
       }
     });
+    if (this['$ws'] && this['$ws'].connected) {
+      this.startGame();
+    } else {
+      EventBus.$on('connected', () => {
+        this.startGame();
+      });
+    }
   }
 
   play(src: string) {
@@ -327,23 +332,24 @@ export default class GameComponent extends Vue {
       };
       if (this.currentState.currentTurnPosition !== this.currentState.actingPlayerPosition) {
         message.type = ActionType.REACTION;
-        message.jokerReaction = action;
+        if (action && action !== '') message.jokerReaction = action;
         this['$ws'].send('/app/playerMessage', JSON.stringify(message));
       } else {
         message.type = ActionType.ACTION;
-        message.jokerAction = action;
+        if (action && action !== '') message.jokerAction = action;
         this['$ws'].send('/app/playerMessage', JSON.stringify(message));
       }
     }
   }
 
-  private actionHandler(state: State) {
+  private actionHandler(data: any) {
     this.play('placeCard.mp3');
-    this.currentState = state;
+    this.currentState = data.state;
     if (this.currentState && this.currentState.currentPlay
         && this.currentState.currentPlay.actions) {
       this.actions = this.currentState.currentPlay.actions;
     }
+    this.me = data.player;
   }
 
   call(quantity: number) {
@@ -372,6 +378,7 @@ export default class GameComponent extends Vue {
 
   startGame() {
     const { gameId, id } = this.$route.params;
+    this.gameId = gameId;
     const message = {
       type: ActionType.START,
       playerId: id,
@@ -429,7 +436,6 @@ export default class GameComponent extends Vue {
         // when user has no requisted suit but has kozyr
         if (highiestSuite.id === -1
             && card.suite !== this.currentState.currentPlay.kozyr.suite) {
-          console.log(card.suite);
           return true;
         }
       }

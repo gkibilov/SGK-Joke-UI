@@ -40,14 +40,11 @@
 import { Component, Vue } from 'vue-property-decorator';
 import { Player } from '../models/Player';
 import { Game } from '../models/Game';
-import Service from '../services/api.service';
 import EventBus from '../services/eventBus.service';
 
 @Component
 export default class RoomComponent extends Vue {
   public rooms: Array<Game> = [];
-
-  private apiService = new Service();
 
   public gameId = '';
 
@@ -60,9 +57,14 @@ export default class RoomComponent extends Vue {
   private playerId: string;
 
   mounted() {
-    EventBus.$on('connected', (playerId) => {
-      this.playerId = playerId;
-    });
+    if (this['$ws'] && this['$ws'].connected) {
+      this.getAllGames();
+    } else {
+      EventBus.$on('connected', (playerId) => {
+        this.playerId = playerId;
+        this.getAllGames();
+      });
+    }
 
     EventBus.$on('app:topic:game', (allGames) => {
       this.handleAllGames(allGames);
@@ -74,8 +76,6 @@ export default class RoomComponent extends Vue {
         if (player && state) {
           localStorage[state.gameId] = player.id;
         }
-      } else if (data.requestType === 'START') {
-        this.$router.push({ name: 'Game', params: { id: player.id || '', gameId: state.gameId } });
       }
     });
   }
@@ -89,25 +89,12 @@ export default class RoomComponent extends Vue {
     } else {
       this.playersTempName = localStorage.playersTempName;
     }
-
-    // this.getAllGames();
-    /* this.polling = setInterval(() => {
-      this.getAllGames();
-    }, 5000); */
   }
 
   create() {
     const key = Math.floor(Math.random() * 100);
     const message = JSON.stringify({ name: `Room-${key}` });
     this['$ws'].send('/app/newGame', message);
-    /* this.apiService.get(`/newGame?name=${`Room-${key}`}`).then((res) => {
-      this.gameId = res.data;
-      this.rooms.push({
-        gameId: res.data,
-        gameName: `Room-${key}`,
-        players: [{} as Player, {} as Player, {} as Player, {} as Player],
-      });
-    }); */
   }
 
   isGameFull(game: Game) {
@@ -129,47 +116,20 @@ export default class RoomComponent extends Vue {
       pos: playerIndex + 1,
     };
 
-    // TODO: change porsition
-    /* if (player in game) {
-      existingId: this.playerId,
-    } */
-    this['$ws'].send('/app/addPlayer', JSON.stringify(message));
-  }
-
-  joinRoom(room: Game, index: number, player: Player, playerIndex: number) {
-    if (room.gameId && localStorage[room.gameId]) {
-      this.$alert('You are already in');
-      return;
-    }
-    if (this.playersTempName) {
-      this.apiService.get(`/addPlayer?name=${this.playersTempName}&gameId=${room.gameId}&position=${playerIndex + 1}`).then((res) => {
-        const state = room;
-        if (state && state.players) {
-          state.players[playerIndex] = res.data.player;
-          state.me = res.data.player;
-          Vue.set(this.rooms, index, state);
-        }
-        if (state.me && room.gameId) {
-          localStorage[room.gameId] = state.me.id;
+    if (game.players && game.players.length) {
+      game.players.forEach((pl) => {
+        if (pl.id === player.id) {
+          message['existingId'] = player.id;
         }
       });
-    } else {
-      this.$alert('name pls!');
     }
+
+    this['$ws'].send('/app/addPlayer', JSON.stringify(message));
   }
 
   start(gameId: string) {
     const playerId = localStorage[gameId];
-    const message = {
-      type: 'START',
-      playerId,
-      gameId,
-    };
-    this['$ws'].send('/app/playerMessage', JSON.stringify(message));
-    /* this.apiService.get(`/startGame?playerId=${playerId}&gameId=${gameId}`).then(() => {
-      // this.apiService.get(`/testFastForward?roundNumber=24&gameId=${gameId}`);
-      this.$router.push({ name: 'Game', params: { id: playerId || '', gameId } });
-    }); */
+    this.$router.push({ name: 'Game', params: { id: playerId || '', gameId } });
   }
 
   disableSitForRoom(gameId: number) {
@@ -180,7 +140,6 @@ export default class RoomComponent extends Vue {
   }
 
   handleAllGames(allGames: Game[]) {
-    console.log(allGames);
     allGames.forEach((game: Game) => {
       if (game.players) {
         const arr = [{} as Player, {} as Player, {} as Player, {} as Player];
@@ -197,21 +156,6 @@ export default class RoomComponent extends Vue {
 
   getAllGames() {
     this['$ws'].send('/app/getAllGames');
-    /* this.apiService.get('/getAllGames').then((res) => {
-      const { data } = res;
-      data.forEach((game: Game) => {
-        if (game.players) {
-          const arr = [{} as Player, {} as Player, {} as Player, {} as Player];
-          game.players.forEach((player) => {
-            if (player && player.position) {
-              arr[player.position - 1] = player;
-            }
-          });
-          game.players = arr;
-        }
-      });
-      this.rooms = data;
-    }); */
   }
 
   beforeDestroy() {

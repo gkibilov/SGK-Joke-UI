@@ -12,7 +12,8 @@ export enum ActionType {
 export interface Message {
   type?: ActionType;
   playerId?: string;
-  gameId: string;
+  gameId?: string;
+  existingId?: string;
   kozyrSuite?: Card;
   wantQty?: number;
   cardId?: number;

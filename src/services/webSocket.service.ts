@@ -3,15 +3,16 @@ import Stomp from 'webstomp-client';
 import VueSimpleAlert from 'vue-simple-alert';
 import EventBus from './eventBus.service';
 
-const socket = new SockJS('http://localhost:8080/sgk-joker-ws.connect');
+let url = `${process.env.VUE_APP_SERVER}/sgk-joker-ws.connect`;
+if (localStorage.principalId) {
+  url = `${url}?auth_token=${localStorage.principalId}`;
+}
+const socket = new SockJS(url);
 const stompClient = Stomp.over(socket);
+
 stompClient.connect(
   {},
   (res) => {
-    if (res && res.headers) {
-      console.log(res.headers);
-      EventBus.$emit('connected', res.headers['user-name']);
-    }
     stompClient.subscribe('/topic/games', (response) => {
       const data = JSON.parse(response.body);
       EventBus.$emit('app:topic:game', data);
@@ -26,7 +27,12 @@ stompClient.connect(
       EventBus.$emit('app:user:reply', data);
     });
 
-    stompClient.send('/app/getAllGames');
+    if (res && res.headers) {
+      if (res.headers['user-name'] && res.headers['user-name'] !== 'undefined') {
+        localStorage.principalId = res.headers['user-name'];
+        EventBus.$emit('connected', res.headers['user-name']);
+      }
+    }
   },
 );
 

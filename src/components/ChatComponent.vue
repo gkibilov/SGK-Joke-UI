@@ -37,8 +37,8 @@ import
   Vue,
   Watch,
 } from 'vue-property-decorator';
-import { AxiosError } from 'axios';
-import Service from '../services/api.service';
+import { ActionType } from '../models/Message';
+import EventBus from '../services/eventBus.service';
 
 @Component
 export default class ChatComponent extends Vue {
@@ -62,25 +62,35 @@ export default class ChatComponent extends Vue {
 
   public text = '';
 
-  private apiService: Service = new Service();
-
   private showChat = false;
 
   private newMessage = false;
 
-  send() {
-    const message = `${this.playerName} > ${this.text}`;
-    this.apiService.get(`/sendMessage?playerId=${this.playerId}&gameId=${this.gameId}&message=${message}`).then(() => {
-      this.text = '';
-      const container = this.$el.querySelector('.chat .body');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }).catch((error: AxiosError) => {
-      if (error.response) {
-        this.$alert(error.response.data.message);
+  mounted() {
+    EventBus.$on('app:user:reply', (data) => {
+      if (data.requestType === ActionType.MESSAGE) {
+        this.handleMessage();
       }
     });
+  }
+
+  handleMessage() {
+    this.text = '';
+    const container = this.$el.querySelector('.chat .body');
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+
+  send() {
+    const tweet = `${this.playerName} > ${this.text}`;
+    const message = {
+      type: ActionType.MESSAGE,
+      playerId: this.playerId,
+      gameId: this.gameId,
+      message: tweet,
+    };
+    this['$ws'].send('/app/playerMessage', JSON.stringify(message));
   }
 
   hideChat() {

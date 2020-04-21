@@ -6,15 +6,17 @@
         <a @click="hideChat()">x</a>
       </div>
       <div class="body">
-        <ul>
-          <li v-for="(message, index) in messages" v-bind:key="index">
+        <ul v-if="newMessages && newMessages.length">
+          <li v-for="(message, index) in newMessages" v-bind:key="index">
             <span v-html="message"></span>
           </li>
         </ul>
       </div>
       <div class="footer">
         <input placeholder="Type..." v-on:keyup.enter="send()" v-model="text"/>
-        <a class="button" @click="send()">Send</a>
+        <a class="button" @click="send()">
+          <img src="../assets/send.png"/>
+        </a>
       </div>
     </template>
     <template v-else>
@@ -37,26 +39,54 @@ import
   Vue,
   Watch,
 } from 'vue-property-decorator';
+import { Howler, Howl } from 'howler';
 import { ActionType } from '../models/Message';
 import EventBus from '../services/eventBus.service';
+import emotions from '../services/emotion.service';
+import { Player } from '../models/Player';
 
 @Component
 export default class ChatComponent extends Vue {
-  @Prop() private messages!: string;
+  @Prop() private messages!: string[];
 
   @Prop() private gameId!: string;
 
-  @Prop() private playerId!: string;
+  @Prop() private player!: Player;
 
-  @Prop() private playerName!: string;
+  private newMessages: string[] = [];
+
+  private mapOfEmotions = this.convertEmotions(emotions);
 
   @Watch('messages')
   onMessagesChanged(newVal: string, oldVal: string) {
+    // replace all smiles
+    this.newMessages = this.messages.map((msg) => this.stringToEmoji(msg).text);
     if (oldVal && newVal && oldVal.length !== newVal.length) {
-      this.newMessage = true;
-      const audio = new Audio();
-      audio.src = 'message.mp3';
-      audio.play();
+      // check last message if contains smile play sound
+      const lastMessageIndex = this.messages.length - 1;
+      const lastMessage = this.messages[lastMessageIndex];
+      const processedMessage = this.stringToEmoji(lastMessage);
+      if (processedMessage.containsSmile) {
+        this.playSound(processedMessage.sound);
+      } else {
+        this.$notify({
+          group: 'newMessage',
+          title: 'New Message',
+          text: processedMessage.text,
+          duration: 3000,
+        });
+        this.newMessage = true;
+        const audio = new Howl({
+          src: ['message.mp3'],
+          /* onplayerror: (error) => {
+            console.log(error);
+          },
+          onerror: (error) => {
+            console.log(error);
+          }, */
+        });
+        audio.play();
+      }
     }
   }
 
@@ -74,19 +104,62 @@ export default class ChatComponent extends Vue {
     });
   }
 
+  convertEmotions(emos) {
+    return emos.reduce((map, obj) => {
+      map[obj.key] = obj;
+      return map;
+    }, {});
+  }
+
+  stringToEmoji(text) {
+    let smileKey;
+    const emojies = Object.keys(this.mapOfEmotions);
+    const emojiRegex = new RegExp(`:(${emojies.join('|')}):`, 'g');
+    const message = text.replace(emojiRegex, (smile) => {
+      smileKey = smile.slice(1, smile.length - 1);
+      return `${this.mapOfEmotions[smileKey].text}`;
+    });
+    if (message !== text) {
+      return {
+        containsSmile: true,
+        sound: this.mapOfEmotions[smileKey].sound,
+        text: message,
+      };
+    }
+    return {
+      containsSmile: false,
+      text,
+    };
+  }
+
   handleMessage() {
     this.text = '';
-    const container = this.$el.querySelector('.chat .body');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    setTimeout(() => {
+      const container = this.$el.querySelector('.chat .body');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }, 0);
+  }
+
+  playSound(sound: string) {
+    const audio = new Howl({
+      src: [sound],
+      /* onplayerror: (error) => {
+        console.log(error);
+      },
+      onerror: (error) => {
+        console.log(error);
+      }, */
+    });
+    audio.play();
   }
 
   send() {
-    const tweet = `${this.playerName} > ${this.text}`;
+    const tweet = `${this.player.name} > ${this.text}`;
     const message = {
       type: ActionType.MESSAGE,
-      playerId: this.playerId,
+      playerId: this.player.id,
       gameId: this.gameId,
       message: tweet,
     };
@@ -101,6 +174,7 @@ export default class ChatComponent extends Vue {
   openChat() {
     this.showChat = true;
     this.newMessage = false;
+    this.handleMessage();
   }
 }
 </script>
@@ -108,26 +182,28 @@ export default class ChatComponent extends Vue {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 .chat {
-  border: 1px solid #fff;
   display: flex;
   flex-direction: column;
   margin: 0px;
   position: fixed;
   bottom: 0;
   width: 9em;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
 .chat .header {
-  background: #fff;
+  background: #3a9fd7;
+  border-radius: 3px 3px 0 0;
   text-align: left;
   display: flex;
   justify-content: space-between;
+  color: #1a4762;
 }
 
 .chat .header h3 {
   margin: 0px;
-  padding: 4px 4px;
-  font-size: 0.6em;
+  padding: 7px 4px;
+  font-size: 0.5em;
 }
 
 .chat .header a {
@@ -156,11 +232,20 @@ export default class ChatComponent extends Vue {
   text-decoration: none;
   list-style: none;
   margin: 0.5em;
-  background-color: #003c4654;
+  margin-right: 3em;
+  background-color: #d4eef8;
   border-radius: 0.3em;
-  color: #fff;
+  color: #878787;
   padding: 4px;
   text-align: left;
+  -webkit-box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.2), 0 0px 10px 0 rgba(0, 0, 0, 0.19);
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.2), 0 0px 10px 0 rgba(0, 0, 0, 0.19);
+}
+
+.chat .body ul li.me {
+  background: white;
+  margin-left: 3em;
+  margin-right: 0.5em;
 }
 
 .chat .footer {
@@ -169,8 +254,9 @@ export default class ChatComponent extends Vue {
 }
 
 .chat .footer {
-  background-color: #eae9e9;
-  padding: 0 5px;
+  background-color: #ffffff;
+  border: 0;
+  height: 25px;
 }
 
 .chat .footer input {
@@ -178,10 +264,14 @@ export default class ChatComponent extends Vue {
 }
 
 .chat .footer .button {
-  background: #008000;
+  background: #3a9fd7;
   font-size: 0.6em;
   color: #fff;
-  padding: 8px;
+  margin-top: 1px;
+  position: absolute;
+  right: 0;
+  height: 24px;
+  width: 35px;
 }
 
 .chat .newMessage {

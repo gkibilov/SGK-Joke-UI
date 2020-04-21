@@ -6,6 +6,7 @@ export enum StateStatus {
   PLAY_DONE = 'PLAY_DONE',
   PLAY_STARTED = 'PLAY_STARTED',
   DEALT = 'DEALT',
+  GAME_OVER = 'GAME_OVER',
 }
 
 export interface State {
@@ -21,4 +22,5 @@ export interface State {
   status?: StateStatus;
   gameOn?: boolean;
   currentPlay?: CurrentPlay;
+  messages?: string[];
 }

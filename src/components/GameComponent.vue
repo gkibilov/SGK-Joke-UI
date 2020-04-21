@@ -1,11 +1,26 @@
 <template>
-  <div class="playingCards">
+  <div class="playingCards" @click="globalClickHandler">
     <div class='some-page-wrapper'>
-      <div class="flex-container">
+      <div class="gameOver" v-if="currentState.status === 'GAME_OVER'">
+        <h3>GAME OVER</h3>
+        <a class='jokerButton' @click='startGame()'>Play Again</a>
+        <a class='jokerButton' @click='goHome()'>Return Home</a>
+        <account v-if="players.length
+                        && currentState
+                        && currentState.cardNumbers"
+                  :players="players"
+                  :numberOfCards="currentState.cardNumbers">
+        </account>
+      </div>
+      <div class="flex-container" v-else>
         <div class="flex-child gamePlay">
           <div class='row'>
             <div class='column inlineCards'>
               <template v-if="opponents[1]">
+                <div class="dealer"
+                      v-if="currentState.dealerPosition === opponents[1].position">
+                  <span>D</span>
+                </div>
                 <div v-if="opponents[1]" class='playerName top'>
                   {{ opponents[1].name }}
                   ({{ opponents[1].call === null
@@ -13,7 +28,7 @@
                 </div>
                 <div class='privateCard0 cardBack'
                       :class="{ active: currentState.currentTurnPosition
-                      === opponents[1].position}">
+                      === opponents[1].position}" @click="showEmotionsPopup(opponents[1].name)">
                 </div>
               </template>
             </div>
@@ -21,6 +36,10 @@
           <div class='row'>
             <div class='column'>
               <template v-if="opponents[0]">
+                <div class="dealer"
+                      v-if="currentState.dealerPosition === opponents[0].position">
+                  <span>D</span>
+                </div>
                 <div class='playerName right'>
                   {{ opponents[0].name }}
                   ({{ opponents[0].call === null
@@ -28,11 +47,13 @@
                 </div>
                 <div class='privateCard90 cardBack90'
                       :class="{ active: currentState.currentTurnPosition
-                      === opponents[0].position}"></div>
+                      === opponents[0].position}" @click="showEmotionsPopup(opponents[0].name)">
+                </div>
               </template>
             </div>
             <div class='column content'>
-              <img src="../assets/SGKLogo.png" />
+              <img id="logoImage" src="../assets/SGKLogo.png" />
+              <emotion v-if="playerToTweet !== ''" :toPlayer="playerToTweet"></emotion>
               <div class="middleActoins">
                 <div class='card' :class='[deck[card.cardId].suite, calculateCardPosition(card)]'
                   v-for='card in actions' v-bind:key='card.cardId'>
@@ -50,11 +71,19 @@
                         && currentState.currentPlay.jokerActionTake" class="jokerDisplayAction">
                     Take <span :class="currentState.currentPlay.actingSuite.toLowerCase()"></span>
                   </span>
+                  <span v-if="deck[card.cardId].suite === 'bez'
+                        && card.jokerReaction" class="jokerDisplayAction">
+                    {{card.jokerReaction}}
+                  </span>
                 </div>
               </div>
             </div>
             <div class='column'>
               <template v-if="opponents[2]">
+                <div class="dealer"
+                      v-if="currentState.dealerPosition === opponents[2].position">
+                  <span>D</span>
+                </div>
                 <div class='playerName left'>
                   {{ opponents[2].name }}
                   ({{ opponents[2].call === null
@@ -62,7 +91,8 @@
                 </div>
                 <div class='privateCard90 cardBack90'
                       :class="{ active: currentState.currentTurnPosition
-                      === opponents[2].position}"></div>
+                      === opponents[2].position}" @click="showEmotionsPopup(opponents[2].name)">
+                </div>
               </template>
             </div>
           </div>
@@ -151,9 +181,13 @@
             <div class="kozyr">
               <div class="kozyrPlace">
                 <div v-if="kozyr && deck[kozyr.id]" class='card' :class='deck[kozyr.id].suite'>
-                  <span class="rank">{{ deck[kozyr.id].type }}</span>
+                  <span class="rank" v-if="deck[kozyr.id].suite != 'bez'">
+                    {{ deck[kozyr.id].type }}
+                  </span>
                   <span class="suit"></span>
-                  <span class="rank rank-bottom">{{ deck[kozyr.id].type }}</span>
+                  <span class="rank rank-bottom" v-if="deck[kozyr.id].suite != 'bez'">
+                    {{ deck[kozyr.id].type }}
+                  </span>
                 </div>
                 <div v-if="kozyr && kozyr.id === -1" class='card wholeCard'
                     :class='kozyr.suite.toLowerCase()'>
@@ -185,8 +219,7 @@
             <chat v-if="me"
                   :messages="currentState.messages"
                   :gameId="gameId"
-                  :playerId="me.id"
-                  :playerName="me.name">
+                  :player="me">
             </chat>
         </div>
       </div>
@@ -198,7 +231,9 @@
 import { Component, Vue } from 'vue-property-decorator';
 import AccountComponent from '@/components/AccountComponent.vue';
 import ChatComponent from '@/components/ChatComponent.vue';
+import SoundComponent from '@/components/SoundComponent.vue';
 import Deck from '@/services/deck.service';
+import { Howler, Howl } from 'howler';
 
 import { Player } from '../models/Player';
 import { State, StateStatus } from '../models/State';
@@ -209,9 +244,10 @@ import { Message, ActionType } from '../models/Message';
 
 Vue.component('account', AccountComponent);
 Vue.component('chat', ChatComponent);
+Vue.component('emotion', SoundComponent);
 
 @Component({
-  components: { AccountComponent, ChatComponent },
+  components: { AccountComponent, ChatComponent, SoundComponent },
 })
 export default class GameComponent extends Vue {
   public currentState: State = {} as State;
@@ -236,6 +272,10 @@ export default class GameComponent extends Vue {
 
   public showJokerActionSuite = false;
 
+  public showEmotions = false;
+
+  public playerToTweet = '';
+
   public jokerAction = '';
 
   public joker: Card = {};
@@ -245,11 +285,11 @@ export default class GameComponent extends Vue {
       if (data.requestType === ActionType.START
           || data.requestType === ActionType.CALL
           || data.requestType === ActionType.SET_KOZYR
-          || data.requestType === ActionType.MESSAGE) {
+          || data.requestType === ActionType.REACTION
+          || data.requestType === ActionType.ACTION) {
         this.refreshState(data);
-      } else if (data.requestType === ActionType.REACTION
-                || data.requestType === ActionType.ACTION) {
-        this.actionHandler(data);
+      } else if (data.requestType === ActionType.MESSAGE) {
+        this.refreshMessages(data.state);
       }
     });
     if (this['$ws'] && this['$ws'].connected) {
@@ -259,11 +299,36 @@ export default class GameComponent extends Vue {
         this.startGame();
       });
     }
+
+    // to keep alive
+    /* setInterval(() => {
+      this.startGame();
+    }, 60000 * 3); */
+  }
+
+  globalClickHandler(event) {
+    if (event.target.classList.contains('column')
+        || event.target.id === 'logoImage') {
+      this.showJokerAction = false;
+      this.showJokerActionSuite = false;
+      this.playerToTweet = '';
+    }
+  }
+
+  showEmotionsPopup(playerName: string) {
+    this.playerToTweet = playerName;
   }
 
   play(src: string) {
-    const audio = new Audio();
-    audio.src = src;
+    const audio = new Howl({
+      src: [src],
+      /* onplayerror: (error) => {
+        console.log(error);
+      },
+      onerror: (error) => {
+        console.log(error);
+      }, */
+    });
     audio.play();
   }
 
@@ -339,17 +404,18 @@ export default class GameComponent extends Vue {
         if (action && action !== '') message.jokerAction = action;
         this['$ws'].send('/app/playerMessage', JSON.stringify(message));
       }
+      this.play('placeCard.mp3');
     }
   }
 
   private actionHandler(data: any) {
-    this.play('placeCard.mp3');
     this.currentState = data.state;
     if (this.currentState && this.currentState.currentPlay
         && this.currentState.currentPlay.actions) {
       this.actions = this.currentState.currentPlay.actions;
     }
     this.me = data.player;
+    this.kozyr = data.state.currentPlay.kozyr;
   }
 
   call(quantity: number) {
@@ -385,10 +451,22 @@ export default class GameComponent extends Vue {
       gameId,
     };
     this['$ws'].send('/app/playerMessage', JSON.stringify(message));
+    const message1 = {
+      type: ActionType.FF,
+      playerId: id,
+      gameId,
+      roundNumber: 8,
+    };
+    this['$ws'].send('/app/playerMessage', JSON.stringify(message1));
+  }
+
+  refreshMessages(state: State) {
+    this.currentState.messages = state.messages;
   }
 
   refreshState(res: any) {
     this.currentState = res.state;
+    // this.currentState.status = StateStatus.GAME_OVER;
     if (this.currentState && this.currentState.currentPlay
         && this.currentState.currentPlay.actions) {
       this.actions = this.currentState.currentPlay.actions;
@@ -516,13 +594,17 @@ export default class GameComponent extends Vue {
       this.play('beepYourTurn.mp3');
     }
   }
+
+  goHome() {
+    this.$router.push({ name: 'Home' });
+  }
 }
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style>
 .active {
-  background-color: #f00 !important;
+  border: 7px solid #e64768 !important;
 }
 .some-page-wrapper {
   background-color: #243e54;
@@ -549,7 +631,7 @@ export default class GameComponent extends Vue {
   min-height: 16em;
 }
 
-.content img {
+.content #logoImage {
   width: 100%;
   position: absolute;
   opacity: 0.5;
@@ -594,7 +676,6 @@ export default class GameComponent extends Vue {
   height: 3.3em;
   border: 1px solid #666;
   border-radius: .3em;
-  padding: .25em;
   margin: -1.7em 0;
   font-size: 1.2em;
 }
@@ -602,17 +683,14 @@ export default class GameComponent extends Vue {
 .playingCards .privateCard0 {
   display: inline-block;
   width: 3.3em;
-  height: 4.6em;
-  border: 1px solid #666;
+  height: 4.7em;
+  border: 7px solid transparent;
   border-radius: .3em;
-  padding: .25em;
-  margin: -1.7em 0;
   font-size: 1.2em;
   margin: 0 -1.7em;
 }
 
 .cardBack, .cardBack90 {
-  background-color: #fff;
   position: relative;
 }
 
@@ -624,7 +702,7 @@ export default class GameComponent extends Vue {
   top: 0;
   left: 0;
   z-index: 0;
-  background: url(/img/back.08a69d65.png) 0 0 repeat;
+  background: url('../assets/back2.png') no-repeat;
   -webkit-transform: rotate(30deg);
   background-size: contain;
   background-position: center;
@@ -635,11 +713,11 @@ export default class GameComponent extends Vue {
   content: "";
   position: absolute;
   width: 100%;
-  height: 137%;
+  height: 140%;
   top: 0;
   left: 0;
   z-index: 0;
-  background: url('../assets/back.png');
+  background: url('../assets/back2.png') no-repeat;
   background-size: contain;
   background-repeat: no-repeat;
   -webkit-transform: rotate(30deg);
@@ -1024,7 +1102,7 @@ export default class GameComponent extends Vue {
 }
 
 .jokerAction .want .BEZ:after {
-  content: "\01F0DF";
+  content: "";
   right: 0.3em;
   top: 0.6em;
   color: #888;
@@ -1118,7 +1196,7 @@ export default class GameComponent extends Vue {
 }
 
 .playingCards .wholeCard.bez .suit:after {
-  content: "\01F0DF";
+  content: "";
   position: absolute;
   right: 0;
   left: 0;
@@ -1146,14 +1224,53 @@ export default class GameComponent extends Vue {
   pointer-events: none;
 }
 
+.dealer {
+  z-index: 1;
+  border: 4px solid #d87287;
+  border-radius: 50%;
+  background: #e64768;
+  padding: 0 5px;
+  position: absolute;
+  color: #fff;
+}
+
+.gameOver {
+  height: 100vh;
+  text-align: center;
+  color: #fff;
+}
+
+.gameOver .account {
+  margin: auto;
+  float: none;
+  display: block;
+  width: 12em;
+}
+
+.gameOver h3 {
+  margin: 0;
+}
+
+.gameOver .jokerButton {
+  border: 1px solid #fff;
+  padding: 5px;
+  display: inline-block;
+  margin: 10px;
+}
+
+.gameOver .jokerButton:hover {
+  background-color: #d87287;
+  cursor: pointer;
+}
+
 @media only screen and (max-width: 900px) {
   .playingCards .card {
     font-size: 1em;
   }
 
   .playingCards .privateCard90 {
-    height: 4em;
     width: 2.8em;
+    height: 4em;
     margin: -2.22em 0;
     font-size: 0.8em;
   }
@@ -1242,6 +1359,11 @@ export default class GameComponent extends Vue {
 
   .middleActoins .alignRight {
     left: 2em;
+  }
+
+  .dealer {
+    padding: 0 2px;
+    font-size: 0.5em;
   }
 }
 </style>

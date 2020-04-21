@@ -6,7 +6,8 @@ export enum ActionType {
   SET_KOZYR = 'SET_KOZYR',
   ACTION = 'ACTION',
   REACTION = 'REACTION',
-  MESSAGE = 'MESSAGE'
+  MESSAGE = 'MESSAGE',
+  FF = 'FF',
 }
 
 export interface Message {
@@ -20,4 +21,5 @@ export interface Message {
   jokerReaction?: string;
   jokerAction?: string;
   message?: string;
+  roundNumber?: string;
 }

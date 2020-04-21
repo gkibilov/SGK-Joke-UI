@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <notifications group="newMessage" />
     <router-view/>
   </div>
 </template>
@@ -43,5 +44,10 @@ height: 100%;}
 
 #nav a.router-link-exact-active {
   color: #42b983;
+}
+
+.vue-notification {
+  background: #2d6794;
+  border-left: 5px solid #0b922f;
 }
 </style>

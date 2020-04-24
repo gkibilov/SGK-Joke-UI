@@ -451,13 +451,13 @@ export default class GameComponent extends Vue {
       gameId,
     };
     this['$ws'].send('/app/playerMessage', JSON.stringify(message));
-    const message1 = {
+    /* const message1 = {
       type: ActionType.FF,
       playerId: id,
       gameId,
       roundNumber: 8,
     };
-    this['$ws'].send('/app/playerMessage', JSON.stringify(message1));
+    this['$ws'].send('/app/playerMessage', JSON.stringify(message1)); */
   }
 
   refreshMessages(state: State) {

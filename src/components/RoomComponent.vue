@@ -90,10 +90,8 @@ export default class RoomComponent extends Vue {
       if (response.authResponse) {
         window.FB.api('/me', { fields: 'id,name,email,picture' }, (res: any) => {
           if (res) {
-            console.log(res);
             Vue.set(self.user, 'name', res.name);
             window.FB.api(`/${res.id}/picture?redirect=false`, 'get', { width: 100 }, (pict: any) => {
-              console.log(pict);
               if (pict) {
                 Vue.set(self.user, 'picture', pict.data.url);
                 Vue.set(self.user, 'unauthorized', false);
@@ -127,7 +125,6 @@ export default class RoomComponent extends Vue {
     if (d.getElementById(id)) {
       return;
     }
-    console.log(id);
     js = d.createElement(s);
     js.id = id;
     js.src = 'https://connect.facebook.net/en_US/sdk.js';
@@ -161,7 +158,6 @@ export default class RoomComponent extends Vue {
   async created() {
     await this.loadFacebookSDK(document, 'script', 'facebook-jssdk');
     await this.initFacebook();
-    console.log(localStorage.user);
     if (!localStorage.user) {
       this.user.unauthorized = true;
     } else {
